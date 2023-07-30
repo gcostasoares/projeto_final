@@ -7,7 +7,7 @@ RUN pip install django
 RUN pip install django-restframework
 RUN pip install Pillow
 
-WORKDIR /app
+WORKDIR /ebac
 
 COPY . .
 
