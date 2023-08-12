@@ -6,6 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.forms import UserCreationForm
 from django import forms
 from django.contrib.auth.models import User
+from django.contrib.auth import update_session_auth_hash
 
 def home(request):
 	if request.user.is_authenticated:
@@ -51,50 +52,59 @@ def unfollow(request, pk):
 		return redirect('home')
 
 def follow(request, pk):
-	if request.user.is_authenticated:
-		# Get the profile to unfollow
-		profile = Profile.objects.get(user_id=pk)
-		# Unfollow the user
-		request.user.profile.follows.add(profile)
-		# Save our profile
-		request.user.profile.save()
+    if request.user.is_authenticated:
+        # Get the profile to follow
+        profile = Profile.objects.get(user_id=pk)
+        
+        # Check if the profile being followed is not the same as the current user's profile
+        if request.user.profile != profile:
+            # Follow the user
+            request.user.profile.follows.add(profile)
+            # Save our profile
+            request.user.profile.save()
 
-		# Return message
-		messages.success(request, (f"You Have Successfully Followed {profile.user.username}"))
-		return redirect(request.META.get("HTTP_REFERER"))
+            # Return message
+            messages.success(request, (f"You Have Successfully Followed {profile.user.username}"))
+        else:
+            messages.error(request, ("You cannot follow yourself."))
 
-	else:
-		messages.success(request, ("You Must Be Logged In To View This Page..."))
-		return redirect('home')
+        return redirect(request.META.get("HTTP_REFERER"))
+    else:
+        messages.success(request, ("You Must Be Logged In To View This Page..."))
+        return redirect('home')
 
 
 
 
 def profile(request, pk):
-	if request.user.is_authenticated:
-		profile = Profile.objects.get(user_id=pk)
-		piupius = Piupiu.objects.filter(user_id=pk).order_by("-created_at")
+    if request.user.is_authenticated:
+        profile = Profile.objects.get(user_id=pk)
+        piupius = Piupiu.objects.filter(user_id=pk).order_by("-created_at")
 
-		# Post Form logic
-		if request.method == "POST":
-			# Get current user
-			current_user_profile = request.user.profile
-			# Get form data
-			action = request.POST['follow']
-			# Decide to follow or unfollow
-			if action == "unfollow":
-				current_user_profile.follows.remove(profile)
-			elif action == "follow":
-				current_user_profile.follows.add(profile)
-			# Save the profile
-			current_user_profile.save()
-
-
-
-		return render(request, "profile.html", {"profile":profile, "piupius":piupius})
-	else:
-		messages.success(request, ("You Must Be Logged In To View This Page..."))
-		return redirect('home')		
+        # Post Form logic
+        if request.method == "POST":
+            # Get current user
+            current_user_profile = request.user.profile
+            # Get form data
+            action = request.POST['follow']
+            
+            # Check if the profile being followed is not the same as the current user's profile
+            if current_user_profile != profile:
+                # Decide to follow or unfollow
+                if action == "unfollow":
+                    current_user_profile.follows.remove(profile)
+                elif action == "follow":
+                    current_user_profile.follows.add(profile)
+                # Save the profile
+                current_user_profile.save()
+            else:
+                messages.error(request, ("You cannot follow yourself."))
+        
+        return render(request, "profile.html", {"profile": profile, "piupius": piupius})
+    else:
+        messages.success(request, ("You Must Be Logged In To View This Page..."))
+        return redirect('home')
+		
 
 def followers(request, pk):
 	if request.user.is_authenticated:
@@ -164,26 +174,46 @@ def register_user(request):
 	
 	return render(request, "register.html", {'form':form})
 
-
 def update_user(request):
-	if request.user.is_authenticated:
-		current_user = User.objects.get(id=request.user.id)
-		profile_user = Profile.objects.get(user__id=request.user.id)
-		# Get Forms
-		user_form = SignUpForm(request.POST or None, request.FILES or None, instance=current_user)
-		profile_form = ProfilePicForm(request.POST or None, request.FILES or None, instance=profile_user)
-		if user_form.is_valid() and profile_form.is_valid():
-			user_form.save()
-			profile_form.save()
+    if request.user.is_authenticated:
+        current_user = User.objects.get(id=request.user.id)
+        profile_user = Profile.objects.get(user__id=request.user.id)
 
-			login(request, current_user)
-			messages.success(request, ("Your Profile Has Been Updated!"))
-			return redirect('home')
+        # Get initial data for the forms
+        user_initial_data = {
+            'email': current_user.email,
+            'username': current_user.username,
+            'first_name': current_user.first_name,
+            'last_name': current_user.last_name,
+        }
 
-		return render(request, "update_user.html", {'user_form':user_form, 'profile_form':profile_form})
-	else:
-		messages.success(request, ("You Must Be Logged In To View That Page..."))
-		return redirect('home')
+        profile_initial_data = {
+            'profile_image': profile_user.profile_image,
+            'profile_bio': profile_user.profile_bio,
+            'homepage_link': profile_user.homepage_link,
+            'facebook_link': profile_user.facebook_link,
+            'instagram_link': profile_user.instagram_link,
+            'linkedin_link': profile_user.linkedin_link,
+        }
+
+        user_form = SignUpForm(request.POST or None, request.FILES or None, instance=current_user, initial=user_initial_data)
+        profile_form = ProfilePicForm(request.POST or None, request.FILES or None, instance=profile_user, initial=profile_initial_data)
+
+        if user_form.is_valid() and profile_form.is_valid():
+            user_form.save()
+            profile_form.save()
+
+            # Update the session auth hash to keep the user logged in
+            update_session_auth_hash(request, current_user)
+
+            messages.success(request, "Your Profile Has Been Updated!")
+            return redirect('home')
+
+        return render(request, "update_user.html", {'user_form': user_form, 'profile_form': profile_form})
+    else:
+        messages.success(request, "You Must Be Logged In To View That Page...")
+        return redirect('home')
+
 	
 def piupiu_like(request, pk):
 	if request.user.is_authenticated:

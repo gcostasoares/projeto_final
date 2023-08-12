@@ -53,9 +53,7 @@ def create_profile(sender, instance, created, **kwargs):
 	if created:
 		user_profile = Profile(user=instance)
 		user_profile.save()
-		# Have the user follow themselves
-		user_profile.follows.set([instance.profile.id])
-		user_profile.save()
+
 
 post_save.connect(create_profile, sender=User)
 

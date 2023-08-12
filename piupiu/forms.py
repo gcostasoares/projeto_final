@@ -2,14 +2,16 @@ from django import forms
 from .models import Piupiu, Profile
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
 
 class ProfilePicForm(forms.ModelForm):
-    profile_image = forms.ImageField(label="Profile Picture")
-    profile_bio = forms.CharField(label="Profile Bio", widget=forms.Textarea(attrs={'class':'form-control', 'placeholder':'Profile Bio'}))
-    homepage_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Website Link'}))
-    facebook_link =  forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Facebook Link'}))
-    instagram_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Instagram Link'}))
-    linkedin_link =  forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Linkedin Link'}))
+    profile_image = forms.ImageField(label="Profile Picture", required=False)
+    profile_bio = forms.CharField(label="Profile Bio", widget=forms.Textarea(attrs={'class':'form-control', 'placeholder':'Profile Bio'}), required=False)
+    homepage_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Website Link'}), required=False)
+    facebook_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Facebook Link'}), required=False)
+    instagram_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Instagram Link'}), required=False)
+    linkedin_link = forms.CharField(label="", widget=forms.TextInput(attrs={'class':'form-control', 'placeholder':'Linkedin Link'}), required=False)
     
     class Meta:
         model = Profile
@@ -56,3 +58,17 @@ class SignUpForm(UserCreationForm):
         self.fields['password2'].widget.attrs['placeholder'] = 'Confirm Password'
         self.fields['password2'].label = ''
         self.fields['password2'].help_text = '<span class="form-text text-muted"><small>Enter the same password as before, for verification.</small></span>'
+        
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        if self.instance.username == username:
+            return username  # Skip validation if username is unchanged
+
+        user_model = get_user_model()
+        try:
+            existing_user = user_model.objects.get(username=username)
+            raise forms.ValidationError("A user with this username already exists.")
+        except user_model.DoesNotExist:
+            return username
+
+
